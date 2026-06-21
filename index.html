@@ -68,12 +68,20 @@
   .card.revealed .pinyin{opacity:1;}
   .card .word{font-size:74px;line-height:1.05;letter-spacing:.06em;text-align:center;}
   .card .reveal{margin-top:26px;text-align:center;opacity:0;transition:opacity .28s;pointer-events:none;}
-  .card.revealed .reveal{opacity:1;}
+  .card.revealed .reveal{opacity:1;pointer-events:auto;}
   .card .rule{width:46px;height:1px;background:var(--hair);margin:0 auto 18px;}
   .card .en{font-size:18px;color:var(--ink);}
   .card .ex{font-size:20px;margin-top:20px;line-height:1.5;}
-  .card .exen{font-size:13px;color:var(--muted);margin-top:7px;}
-  .card .hint{margin-top:26px;font-size:12px;color:var(--faint);letter-spacing:.1em;}
+  .card .expinyin{font-size:14px;color:var(--accent);margin-top:6px;}
+  .card .exen{font-size:13px;color:var(--muted);margin-top:5px;}
+  .card .hint{margin-top:24px;font-size:12px;color:var(--faint);letter-spacing:.1em;}
+  .spk{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+    border-radius:50%;border:1px solid var(--hair);background:var(--surface);cursor:pointer;
+    vertical-align:middle;padding:0;flex:none;}
+  .spk svg{width:16px;height:16px;stroke:var(--accent);fill:none;stroke-width:1.5;}
+  .spk:active{background:var(--accent-soft);}
+  .word-spk{margin-top:18px;}
+  .ex-line{display:inline-flex;align-items:center;gap:10px;justify-content:center;}
   .rev-actions{display:flex;gap:14px;padding:14px 26px calc(var(--safe-bottom) + 18px);}
   .rev-actions button{flex:1;border-radius:16px;padding:15px 0;font-size:14px;letter-spacing:.1em;
     border:1px solid var(--hair);background:var(--surface);color:var(--ink);cursor:pointer;}
@@ -83,6 +91,10 @@
   .rev-empty .big{font-size:30px;}
 
   /* ---------- list ---------- */
+  .filters{display:flex;gap:8px;margin-bottom:24px;}
+  .filters button{border:1px solid var(--hair);background:var(--surface);color:var(--muted);
+    border-radius:999px;padding:7px 16px;font-size:13px;letter-spacing:.04em;cursor:pointer;font-family:inherit;}
+  .filters button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
   .cat{margin-bottom:30px;}
   .cat-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;
     padding-bottom:9px;border-bottom:1px solid var(--hair);}
@@ -95,6 +107,7 @@
   .row .h{font-size:21px;min-width:64px;}
   .row .p{font-size:13px;color:var(--accent);min-width:74px;}
   .row .e{font-size:13px;color:var(--muted);flex:1;}
+  .row .miss{font-size:11px;color:#B0705E;letter-spacing:.04em;flex:none;}
   .row.done .h,.row.done .e{opacity:.4;}
 
   /* ---------- import ---------- */
@@ -126,8 +139,8 @@
   .setting{display:flex;align-items:center;justify-content:space-between;padding:16px 2px;
     border-bottom:1px solid var(--hair);}
   .setting .lab{font-size:15px;}
-  .setting input[type=time]{background:var(--surface);border:1px solid var(--hair);border-radius:10px;
-    padding:7px 10px;font-size:15px;font-family:inherit;color:var(--ink);}
+  .setting input[type=time],.setting select{background:var(--surface);border:1px solid var(--hair);
+    border-radius:10px;padding:7px 10px;font-size:15px;font-family:inherit;color:var(--ink);max-width:60%;}
   .note{font-size:12px;color:var(--muted);line-height:1.7;margin-top:14px;}
 
   .toast{position:fixed;left:50%;bottom:calc(var(--safe-bottom) + 78px);transform:translateX(-50%);
@@ -152,6 +165,11 @@
   <!-- ===== 一覧 ===== -->
   <section class="screen" id="s-list">
     <h1 class="title">単語一覧</h1>
+    <div class="filters" id="filters">
+      <button data-f="all" class="active">すべて</button>
+      <button data-f="todo">未習得</button>
+      <button data-f="done">習得済み</button>
+    </div>
     <div id="listBody"></div>
   </section>
 
@@ -167,7 +185,7 @@
     </ol>
     <button class="btn ghost" id="btnCopyPrompt">プロンプトをコピー</button>
     <label class="fld">JSONを貼り付け</label>
-    <textarea id="impJson" placeholder='[{"hanzi":"合同","pinyin":"hétóng","en":"contract","ex":"我们签了合同。","exEn":"We signed the contract."}]' autocapitalize="off" spellcheck="false"></textarea>
+    <textarea id="impJson" placeholder='[{"hanzi":"合同","pinyin":"hétóng","en":"contract","ex":"我们签了合同。","exPinyin":"Wǒmen qiānle hétóng.","exEn":"We signed the contract."}]' autocapitalize="off" spellcheck="false"></textarea>
     <button class="btn solid" id="btnImport">取り込む</button>
     <div class="result" id="impResult"></div>
   </section>
@@ -185,8 +203,18 @@
       <span class="lab">毎日のリマインド</span>
       <input type="time" id="remindTime" value="20:00">
     </div>
+    <div class="setting">
+      <span class="lab">読み上げ音声</span>
+      <select id="voiceSel"></select>
+    </div>
+    <p class="note">※ より自然な声にするには、iPhoneの「設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 中国語」で高品質版をダウンロードし、ここで選択してください。</p>
     <p class="note">※ iOSで毎日のリマインドを出すには、同梱の「reminder.ics」を1度タップしてカレンダーに追加してください（毎日この時刻に通知）。</p>
-    <button class="btn ghost" id="btnReset" style="margin-top:26px;">データをリセット（サンプルに戻す）</button>
+    <div style="margin-top:30px;">
+      <button class="btn ghost" id="btnExport">データを書き出す（バックアップ）</button>
+      <button class="btn ghost" id="btnImportFile">データを読み込む（復元）</button>
+      <input type="file" id="fileInput" accept="application/json,.json" style="display:none;">
+    </div>
+    <button class="btn ghost" id="btnReset" style="color:#B0705E;">データをリセット（サンプルに戻す）</button>
   </section>
 
   <!-- ===== nav ===== -->
@@ -213,12 +241,12 @@
 
 <script>
 const PROMPT = `このスクリーンショットに写っている中国語の単語をすべて抽出し、JSON配列だけを出力してください。各要素の形式：
-{"hanzi":"簡体字","pinyin":"声調記号付きピンイン","en":"簡潔な英語の意味","ex":"その単語を使った短い例文（簡体字）","exEn":"例文の英訳"}
+{"hanzi":"簡体字","pinyin":"声調記号付きピンイン","en":"簡潔な英語の意味","ex":"その単語を使った短い例文（簡体字）","exPinyin":"例文の声調記号付きピンイン","exEn":"例文の英訳"}
 重複は除く。例文は短く（10語程度まで）。説明や前置きは不要。配列のみ。`;
 
 const todayKey = () => new Date().toISOString().slice(0,10);
 
-const SEED_V = 2;
+const SEED_V = 3;
 let DB = load();
 save();
 function load(){
@@ -228,14 +256,14 @@ function load(){
   return {
     v:SEED_V,
     words:[
-      {id:1,hanzi:'合同',pinyin:'hétóng',en:'contract',ex:'我们签了合同。',exEn:'We signed the contract.',cat:'商务会话',done:false},
-      {id:2,hanzi:'报价',pinyin:'bàojià',en:'quotation',ex:'请给我一个报价。',exEn:'Please give me a quotation.',cat:'商务会话',done:false},
-      {id:3,hanzi:'发票',pinyin:'fāpiào',en:'invoice',ex:'我需要一张发票。',exEn:'I need an invoice.',cat:'商务会话',done:false},
-      {id:4,hanzi:'谈判',pinyin:'tánpàn',en:'negotiation',ex:'谈判很顺利。',exEn:'The negotiation went well.',cat:'商务会话',done:true},
-      {id:5,hanzi:'地铁',pinyin:'dìtiě',en:'subway',ex:'我坐地铁上班。',exEn:'I take the subway to work.',cat:'日常',done:false},
-      {id:6,hanzi:'钱包',pinyin:'qiánbāo',en:'wallet',ex:'我的钱包丢了。',exEn:'I lost my wallet.',cat:'日常',done:false},
-      {id:7,hanzi:'雨伞',pinyin:'yǔsǎn',en:'umbrella',ex:'记得带雨伞。',exEn:'Remember to bring an umbrella.',cat:'日常',done:true},
-      {id:8,hanzi:'附近',pinyin:'fùjìn',en:'nearby',ex:'附近有银行吗？',exEn:'Is there a bank nearby?',cat:'日常',done:false},
+      {id:1,hanzi:'合同',pinyin:'hétóng',en:'contract',ex:'我们签了合同。',exPinyin:'Wǒmen qiānle hétóng.',exEn:'We signed the contract.',cat:'商务会话',done:false,miss:0},
+      {id:2,hanzi:'报价',pinyin:'bàojià',en:'quotation',ex:'请给我一个报价。',exPinyin:'Qǐng gěi wǒ yí ge bàojià.',exEn:'Please give me a quotation.',cat:'商务会话',done:false,miss:0},
+      {id:3,hanzi:'发票',pinyin:'fāpiào',en:'invoice',ex:'我需要一张发票。',exPinyin:'Wǒ xūyào yì zhāng fāpiào.',exEn:'I need an invoice.',cat:'商务会话',done:false,miss:0},
+      {id:4,hanzi:'谈判',pinyin:'tánpàn',en:'negotiation',ex:'谈判很顺利。',exPinyin:'Tánpàn hěn shùnlì.',exEn:'The negotiation went well.',cat:'商务会话',done:true,miss:0},
+      {id:5,hanzi:'地铁',pinyin:'dìtiě',en:'subway',ex:'我坐地铁上班。',exPinyin:'Wǒ zuò dìtiě shàngbān.',exEn:'I take the subway to work.',cat:'日常',done:false,miss:0},
+      {id:6,hanzi:'钱包',pinyin:'qiánbāo',en:'wallet',ex:'我的钱包丢了。',exPinyin:'Wǒ de qiánbāo diū le.',exEn:'I lost my wallet.',cat:'日常',done:false,miss:0},
+      {id:7,hanzi:'雨伞',pinyin:'yǔsǎn',en:'umbrella',ex:'记得带雨伞。',exPinyin:'Jìde dài yǔsǎn.',exEn:'Remember to bring an umbrella.',cat:'日常',done:true,miss:0},
+      {id:8,hanzi:'附近',pinyin:'fùjìn',en:'nearby',ex:'附近有银行吗？',exPinyin:'Fùjìn yǒu yínháng ma?',exEn:'Is there a bank nearby?',cat:'日常',done:false,miss:0},
     ],
     stats:{},
     nextId:9,
@@ -250,6 +278,35 @@ function toast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1600);
+}
+
+/* ---------------- audio ---------------- */
+const SPK_SVG='<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg>';
+function spkBtn(text){ return `<button class="spk" data-say="${String(text).replace(/"/g,'&quot;')}">${SPK_SVG}</button>`; }
+function zhVoices(){ return speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.toLowerCase().startsWith('zh')); }
+function speak(text){
+  if(!('speechSynthesis' in window)||!text) return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='zh-CN'; u.rate=0.9;
+  const voices=zhVoices();
+  let v=DB.voice ? voices.find(x=>x.voiceURI===DB.voice) : null;
+  if(!v) v=voices[0];
+  if(v){ u.voice=v; u.lang=v.lang; }
+  speechSynthesis.speak(u);
+}
+function populateVoices(){
+  const sel=document.getElementById('voiceSel');
+  if(!sel) return;
+  const voices=zhVoices();
+  if(voices.length===0){ sel.innerHTML='<option>（中国語音声なし）</option>'; return; }
+  sel.innerHTML=voices.map(v=>`<option value="${v.voiceURI}">${v.name}</option>`).join('');
+  if(DB.voice && voices.some(v=>v.voiceURI===DB.voice)) sel.value=DB.voice;
+  else { DB.voice=voices[0].voiceURI; save(); }
+}
+if('speechSynthesis' in window){
+  speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged=populateVoices;
 }
 
 /* ---------------- navigation ---------------- */
@@ -298,16 +355,22 @@ function nextCard(){
   stage.innerHTML=`<div class="card" id="card">
       <div class="pinyin">${current.pinyin}</div>
       <div class="word hanzi">${current.hanzi}</div>
+      <div class="word-spk">${spkBtn(current.hanzi)}</div>
       <div class="reveal">
         <div class="rule"></div>
         <div class="en">${current.en}</div>
-        ${current.ex?`<div class="ex hanzi">${current.ex}</div>`:''}
+        ${current.ex?`<div class="ex-line"><span class="ex hanzi">${current.ex}</span>${spkBtn(current.ex)}</div>`:''}
+        ${current.exPinyin?`<div class="expinyin">${current.exPinyin}</div>`:''}
         ${current.exEn?`<div class="exen">${current.exEn}</div>`:''}
       </div>
       <div class="hint" id="hint">タップで意味</div>
     </div>`;
-  document.getElementById('card').addEventListener('click',reveal);
-  attachSwipe(document.getElementById('card'));
+  const card=document.getElementById('card');
+  card.addEventListener('click',reveal);
+  card.querySelectorAll('.spk').forEach(b=>b.addEventListener('click',ev=>{
+    ev.stopPropagation(); speak(b.dataset.say);
+  }));
+  attachSwipe(card);
 }
 function reveal(){
   if(revealed||!current) return;
@@ -323,7 +386,10 @@ function judge(known){
   save(); updateProgress(); nextCard();
 }
 document.getElementById('btnKnown').onclick=()=>judge(true);
-document.getElementById('btnStill').onclick=()=>{ if(current) queue.push(current); judge(false); };
+document.getElementById('btnStill').onclick=()=>{
+  if(current){ const w=DB.words.find(x=>x.id===current.id); if(w) w.miss=(w.miss||0)+1; queue.push(current); }
+  judge(false);
+};
 
 function attachSwipe(card){
   let x0=0,y0=0,dx=0,drag=false;
@@ -345,26 +411,32 @@ function fly(card,dir){ card.style.transition='transform .25s,opacity .25s';
   card.style.transform=`translateX(${dir*500}px) rotate(${dir*18}deg)`;card.style.opacity=0; }
 
 /* ---------------- list ---------------- */
+let listFilter='all';
+function matchFilter(w){ return listFilter==='all'||(listFilter==='done'?w.done:!w.done); }
 function renderList(){
   const body=document.getElementById('listBody');
   const cats=[...new Set(DB.words.map(w=>w.cat))];
-  if(cats.length===0){ body.innerHTML='<p class="note">まだ単語がありません。取込から追加してください。</p>'; return; }
-  body.innerHTML=cats.map(cat=>{
-    const ws=DB.words.filter(w=>w.cat===cat);
-    const done=ws.filter(w=>w.done).length;
+  if(DB.words.length===0){ body.innerHTML='<p class="note">まだ単語がありません。取込から追加してください。</p>'; return; }
+  const html=cats.map(cat=>{
+    const all=DB.words.filter(w=>w.cat===cat);
+    const ws=all.filter(matchFilter);
+    if(ws.length===0) return '';
+    const done=all.filter(w=>w.done).length;
     return `<div class="cat">
       <div class="cat-head">
         <span class="name" data-cat="${cat}">${cat}</span>
-        <span class="meta">${done} / ${ws.length}</span>
+        <span class="meta">${done} / ${all.length}</span>
       </div>
       ${ws.map(w=>`<div class="row ${w.done?'done':''}" data-id="${w.id}">
         <span class="dot"></span>
         <span class="h hanzi">${w.hanzi}</span>
         <span class="p">${w.pinyin}</span>
         <span class="e">${w.en}</span>
+        ${(w.miss>0)?`<span class="miss">✕${w.miss}</span>`:''}
       </div>`).join('')}
     </div>`;
   }).join('');
+  body.innerHTML=html||'<p class="note">該当する単語がありません。</p>';
   body.querySelectorAll('.row').forEach(r=>r.onclick=()=>{
     const w=DB.words.find(x=>x.id==r.dataset.id); w.done=!w.done; save(); renderList();
   });
@@ -393,7 +465,7 @@ document.getElementById('btnImport').onclick=()=>{
     if(!it||!it.hanzi) return;
     if(existing.has(it.hanzi)){ skipped++; return; }
     existing.add(it.hanzi);
-    DB.words.push({id:DB.nextId++,hanzi:it.hanzi,pinyin:it.pinyin||'',en:it.en||'',ex:it.ex||'',exEn:it.exEn||'',cat,done:false});
+    DB.words.push({id:DB.nextId++,hanzi:it.hanzi,pinyin:it.pinyin||'',en:it.en||'',ex:it.ex||'',exPinyin:it.exPinyin||'',exEn:it.exEn||'',cat,done:false,miss:0});
     added++;
   });
   save();
@@ -410,8 +482,46 @@ function renderStats(){
   document.getElementById('stNew').textContent=s.neu;
   document.getElementById('stTotal').textContent=DB.words.filter(w=>w.done).length;
   document.getElementById('remindTime').value=DB.remind;
+  populateVoices();
 }
+document.getElementById('voiceSel').onchange=e=>{ DB.voice=e.target.value; save(); speak('你好，这是中文示例。'); };
 document.getElementById('remindTime').onchange=e=>{ DB.remind=e.target.value; save(); toast('リマインド時刻を保存'); };
+
+document.querySelectorAll('#filters button').forEach(b=>b.onclick=()=>{
+  listFilter=b.dataset.f;
+  document.querySelectorAll('#filters button').forEach(x=>x.classList.toggle('active',x===b));
+  renderList();
+});
+
+/* バックアップ: 書き出し */
+document.getElementById('btnExport').onclick=()=>{
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='chinese-vocab-backup-'+todayKey()+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('バックアップを書き出しました');
+};
+/* バックアップ: 復元 */
+document.getElementById('btnImportFile').onclick=()=>document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(r.result);
+      if(!data||!Array.isArray(data.words)) throw 0;
+      if(confirm('現在のデータを、読み込んだバックアップで置き換えます。よろしいですか？')){
+        DB=data; if(!DB.v) DB.v=SEED_V; if(!DB.stats) DB.stats={};
+        if(!DB.nextId) DB.nextId=Math.max(0,...DB.words.map(w=>w.id||0))+1;
+        save(); location.reload();
+      }
+    }catch{ toast('読み込めるバックアップではありません'); }
+    e.target.value='';
+  };
+  r.readAsText(f);
+};
 
 document.getElementById('btnReset').onclick=()=>{
   if(confirm('保存データを消してサンプルに戻します。よろしいですか？')){
