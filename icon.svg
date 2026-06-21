@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#F4F1EA"/>
+  <rect x="64" y="64" width="384" height="384" rx="2" fill="none" stroke="#3A4A5A" stroke-width="3" opacity="0.5"/>
+  <text x="256" y="256" font-family="Songti SC, STSong, serif" font-size="300" font-weight="300"
+        fill="#1C1A17" text-anchor="middle" dominant-baseline="central">词</text>
+</svg>
