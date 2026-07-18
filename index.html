@@ -239,6 +239,7 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="data.js"></script>
 <script>
 const PROMPT = `このスクリーンショットに写っている中国語の単語をすべて抽出し、JSON配列だけを出力してください。各要素の形式：
 {"hanzi":"簡体字","pinyin":"声調記号付きピンイン","en":"簡潔な英語の意味","ex":"その単語を使った短い例文（簡体字）","exPinyin":"例文の声調記号付きピンイン","exEn":"例文の英訳"}
@@ -246,29 +247,23 @@ const PROMPT = `このスクリーンショットに写っている中国語の�
 
 const todayKey = () => new Date().toISOString().slice(0,10);
 
-const SEED_V = 3;
+const SEED_V = 4;
+const FALLBACK_WORDS=[
+  {hanzi:'合同',pinyin:'hétóng',en:'contract',ex:'我们签了合同。',exPinyin:'Wǒmen qiānle hétóng.',exEn:'We signed the contract.',cat:'商务会话'},
+  {hanzi:'地铁',pinyin:'dìtiě',en:'subway',ex:'我坐地铁上班。',exPinyin:'Wǒ zuò dìtiě shàngbān.',exEn:'I take the subway to work.',cat:'日常'},
+];
 let DB = load();
 save();
 function load(){
   const raw = localStorage.getItem('cv_db');
   if(raw){ try{ const p = JSON.parse(raw); if(p.v === SEED_V) return p; }catch{} }
-  // seed sample data
-  return {
-    v:SEED_V,
-    words:[
-      {id:1,hanzi:'合同',pinyin:'hétóng',en:'contract',ex:'我们签了合同。',exPinyin:'Wǒmen qiānle hétóng.',exEn:'We signed the contract.',cat:'商务会话',done:false,miss:0},
-      {id:2,hanzi:'报价',pinyin:'bàojià',en:'quotation',ex:'请给我一个报价。',exPinyin:'Qǐng gěi wǒ yí ge bàojià.',exEn:'Please give me a quotation.',cat:'商务会话',done:false,miss:0},
-      {id:3,hanzi:'发票',pinyin:'fāpiào',en:'invoice',ex:'我需要一张发票。',exPinyin:'Wǒ xūyào yì zhāng fāpiào.',exEn:'I need an invoice.',cat:'商务会话',done:false,miss:0},
-      {id:4,hanzi:'谈判',pinyin:'tánpàn',en:'negotiation',ex:'谈判很顺利。',exPinyin:'Tánpàn hěn shùnlì.',exEn:'The negotiation went well.',cat:'商务会话',done:true,miss:0},
-      {id:5,hanzi:'地铁',pinyin:'dìtiě',en:'subway',ex:'我坐地铁上班。',exPinyin:'Wǒ zuò dìtiě shàngbān.',exEn:'I take the subway to work.',cat:'日常',done:false,miss:0},
-      {id:6,hanzi:'钱包',pinyin:'qiánbāo',en:'wallet',ex:'我的钱包丢了。',exPinyin:'Wǒ de qiánbāo diū le.',exEn:'I lost my wallet.',cat:'日常',done:false,miss:0},
-      {id:7,hanzi:'雨伞',pinyin:'yǔsǎn',en:'umbrella',ex:'记得带雨伞。',exPinyin:'Jìde dài yǔsǎn.',exEn:'Remember to bring an umbrella.',cat:'日常',done:true,miss:0},
-      {id:8,hanzi:'附近',pinyin:'fùjìn',en:'nearby',ex:'附近有银行吗？',exPinyin:'Fùjìn yǒu yínháng ma?',exEn:'Is there a bank nearby?',cat:'日常',done:false,miss:0},
-    ],
-    stats:{},
-    nextId:9,
-    remind:'20:00'
-  };
+  const src = (typeof SEED_WORDS!=='undefined' && SEED_WORDS.length) ? SEED_WORDS : FALLBACK_WORDS;
+  const words = src.map((w,i)=>({
+    id:i+1, hanzi:w.hanzi, pinyin:w.pinyin||'', en:w.en||'',
+    ex:w.ex||'', exPinyin:w.exPinyin||'', exEn:w.exEn||'',
+    cat:w.cat||'未分類', done:!!w.done, miss:w.miss||0
+  }));
+  return { v:SEED_V, words, stats:{}, nextId:words.length+1, remind:'20:00', voice:'' };
 }
 function save(){ localStorage.setItem('cv_db', JSON.stringify(DB)); }
 
