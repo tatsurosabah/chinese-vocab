@@ -254,9 +254,22 @@ const FALLBACK_WORDS=[
 ];
 let DB = load();
 save();
+function mergeExamples(db){
+  // 既存の進捗を保ったまま、SEED_WORDS から例文(ex/exPinyin/exEn)を後追いで補完する（非破壊）
+  if(typeof SEED_WORDS==='undefined') return db;
+  let changed=false;
+  db.words.forEach(w=>{
+    if(w.ex) return;
+    let cand = SEED_WORDS[w.id-1];
+    if(!(cand && cand.hanzi===w.hanzi)) cand = SEED_WORDS.find(x=>x.hanzi===w.hanzi);
+    if(cand && cand.ex){ w.ex=cand.ex; w.exPinyin=cand.exPinyin||''; w.exEn=cand.exEn||''; changed=true; }
+  });
+  if(changed) localStorage.setItem('cv_db', JSON.stringify(db));
+  return db;
+}
 function load(){
   const raw = localStorage.getItem('cv_db');
-  if(raw){ try{ const p = JSON.parse(raw); if(p.v === SEED_V) return p; }catch{} }
+  if(raw){ try{ const p = JSON.parse(raw); if(p.v === SEED_V) return mergeExamples(p); }catch{} }
   const src = (typeof SEED_WORDS!=='undefined' && SEED_WORDS.length) ? SEED_WORDS : FALLBACK_WORDS;
   const words = src.map((w,i)=>({
     id:i+1, hanzi:w.hanzi, pinyin:w.pinyin||'', en:w.en||'',
