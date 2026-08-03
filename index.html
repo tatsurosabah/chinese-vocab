@@ -91,7 +91,12 @@
   .rev-empty .big{font-size:30px;}
 
   /* ---------- list ---------- */
-  .filters{display:flex;gap:8px;margin-bottom:24px;}
+  .filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .filters.scroll{flex-wrap:nowrap;overflow-x:auto;margin:0 -22px 14px;padding:0 22px 4px;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .filters.scroll::-webkit-scrollbar{display:none;}
+  .filters.scroll button{flex:none;}
+  .count{font-size:11px;color:var(--faint);letter-spacing:.1em;margin:0 2px 18px;}
   .filters button{border:1px solid var(--hair);background:var(--surface);color:var(--muted);
     border-radius:999px;padding:7px 16px;font-size:13px;letter-spacing:.04em;cursor:pointer;font-family:inherit;}
   .filters button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
@@ -170,6 +175,8 @@
       <button data-f="todo">未習得</button>
       <button data-f="done">習得済み</button>
     </div>
+    <div class="filters scroll" id="catFilters"></div>
+    <div class="count" id="listCount"></div>
     <div id="listBody"></div>
   </section>
 
@@ -198,6 +205,8 @@
       <div class="stat"><div class="n" id="stViewed">0</div><div class="l">今日見た単語</div></div>
       <div class="stat"><div class="n" id="stNew">0</div><div class="l">今日覚えた</div></div>
       <div class="stat"><div class="n" id="stTotal">0</div><div class="l">習得済み（累計）</div></div>
+      <div class="stat"><div class="n" id="stWords">0</div><div class="l">登録単語数</div></div>
+      <div class="stat"><div class="n" id="stCats">0</div><div class="l">カテゴリ数</div></div>
     </div>
     <div class="setting">
       <span class="lab">毎日のリマインド</span>
@@ -326,7 +335,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   Object.entries(screens).forEach(([k,id])=>
     document.getElementById(id).classList.toggle('active',k===t));
   if(t==='review') enterReview();
-  if(t==='list') renderList();
+  if(t==='list'){ renderCatFilters(); renderList(); }
   if(t==='stats') renderStats();
 });
 
@@ -420,11 +429,32 @@ function fly(card,dir){ card.style.transition='transform .25s,opacity .25s';
 
 /* ---------------- list ---------------- */
 let listFilter='all';
-function matchFilter(w){ return listFilter==='all'||(listFilter==='done'?w.done:!w.done); }
+let catFilter='all';
+function matchFilter(w){
+  if(catFilter!=='all' && w.cat!==catFilter) return false;
+  return listFilter==='all'||(listFilter==='done'?w.done:!w.done);
+}
+function renderCatFilters(){
+  const box=document.getElementById('catFilters');
+  const cats=[...new Set(DB.words.map(w=>w.cat))];
+  if(catFilter!=='all' && !cats.includes(catFilter)) catFilter='all';
+  box.innerHTML=`<button data-c="all" class="${catFilter==='all'?'active':''}">全カテゴリ</button>`+
+    cats.map(c=>`<button data-c="${c}" class="${catFilter===c?'active':''}">${c}</button>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    catFilter=b.dataset.c; renderCatFilters(); renderList();
+  });
+}
 function renderList(){
   const body=document.getElementById('listBody');
   const cats=[...new Set(DB.words.map(w=>w.cat))];
-  if(DB.words.length===0){ body.innerHTML='<p class="note">まだ単語がありません。取込から追加してください。</p>'; return; }
+  if(DB.words.length===0){
+    document.getElementById('listCount').textContent='';
+    body.innerHTML='<p class="note">まだ単語がありません。取込から追加してください。</p>'; return;
+  }
+  const shown=DB.words.filter(matchFilter).length;
+  const doneAll=DB.words.filter(w=>w.done).length;
+  document.getElementById('listCount').textContent=
+    `表示 ${shown} 語 ／ 全 ${DB.words.length} 語（習得 ${doneAll}）`;
   const html=cats.map(cat=>{
     const all=DB.words.filter(w=>w.cat===cat);
     const ws=all.filter(matchFilter);
@@ -451,7 +481,11 @@ function renderList(){
   body.querySelectorAll('.name').forEach(n=>n.onclick=()=>{
     const old=n.dataset.cat;
     const nu=prompt('カテゴリ名を変更',old);
-    if(nu&&nu.trim()&&nu!==old){ DB.words.forEach(w=>{if(w.cat===old)w.cat=nu.trim();}); save(); renderList(); }
+    if(nu&&nu.trim()&&nu!==old){
+      DB.words.forEach(w=>{if(w.cat===old)w.cat=nu.trim();});
+      if(catFilter===old) catFilter=nu.trim();
+      save(); renderCatFilters(); renderList();
+    }
   });
 }
 
@@ -489,6 +523,8 @@ function renderStats(){
   document.getElementById('stViewed').textContent=s.viewed;
   document.getElementById('stNew').textContent=s.neu;
   document.getElementById('stTotal').textContent=DB.words.filter(w=>w.done).length;
+  document.getElementById('stWords').textContent=DB.words.length;
+  document.getElementById('stCats').textContent=new Set(DB.words.map(w=>w.cat)).size;
   document.getElementById('remindTime').value=DB.remind;
   populateVoices();
 }
