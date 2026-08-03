@@ -575,7 +575,14 @@ document.getElementById('btnReset').onclick=()=>{
 
 /* service worker (本番URLでのみ動作。file://では無効) */
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    reg.update();
+    // 新しいバージョンが有効になったら一度だけ自動リロード
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(reloaded) return; reloaded=true; location.reload();
+    });
+  }).catch(()=>{});
 }
 
 /* boot */
