@@ -217,7 +217,9 @@
       <select id="voiceSel"></select>
     </div>
     <p class="note">※ より自然な声にするには、iPhoneの「設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 中国語」で高品質版をダウンロードし、ここで選択してください。</p>
-    <p class="note">※ iOSで毎日のリマインドを出すには、同梱の「reminder.ics」を1度タップしてカレンダーに追加してください（毎日この時刻に通知）。</p>
+    <button class="btn ghost" id="btnMakeIcs" style="margin-top:14px;">この時刻で毎日リマインドを追加</button>
+    <p class="note">※ タップするとカレンダー用ファイルが作られます。開いて「追加」すると毎日この時刻に通知が来ます。<br>
+    もっと確実にしたい場合は、iPhoneの「ショートカット」→オートメーション→時刻→「Appを開く」で「词」を指定してください（自動でアプリが開きます）。</p>
     <div style="margin-top:30px;">
       <button class="btn ghost" id="btnExport">データを書き出す（バックアップ）</button>
       <button class="btn ghost" id="btnImportFile">データを読み込む（復元）</button>
@@ -536,6 +538,34 @@ document.querySelectorAll('#filters button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#filters button').forEach(x=>x.classList.toggle('active',x===b));
   renderList();
 });
+
+/* 毎日リマインドの .ics を設定時刻で生成 */
+document.getElementById('btnMakeIcs').onclick=()=>{
+  const t=(DB.remind||'20:00').split(':');
+  const hh=String(t[0]).padStart(2,'0'), mm=String(t[1]||'00').padStart(2,'0');
+  const d=new Date(); // 今日の日付を開始日に
+  const y=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
+  const ics=[
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//ChineseVocab//Daily//JA','CALSCALE:GREGORIAN','METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    'UID:chinese-vocab-daily-'+hh+mm+'@local',
+    'DTSTAMP:'+y+mo+da+'T000000',
+    'DTSTART:'+y+mo+da+'T'+hh+mm+'00',
+    'DURATION:PT5M',
+    'RRULE:FREQ=DAILY',
+    'SUMMARY:中国語の単語復習',
+    'DESCRIPTION:今日の単語を復習しましょう。https://tatsurosabah.github.io/chinese-vocab/',
+    'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:中国語の単語復習','TRIGGER:PT0M','END:VALARM',
+    'END:VEVENT','END:VCALENDAR'
+  ].join('\r\n');
+  const blob=new Blob([ics],{type:'text/calendar'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='chinese-vocab-reminder.ics';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  toast(hh+':'+mm+' のリマインドを作成しました');
+};
 
 /* バックアップ: 書き出し */
 document.getElementById('btnExport').onclick=()=>{
