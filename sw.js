@@ -1,8 +1,9 @@
-const CACHE = 'cv-v7';
+const CACHE = 'cv-v8';
 const ASSETS = [
   './',
   './index.html',
   './data.js',
+  './audio.js',
   './manifest.json',
   './icon-180.png',
   './icon-512.png'
