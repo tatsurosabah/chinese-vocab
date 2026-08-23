@@ -219,6 +219,8 @@
   <section class="screen" id="s-stats">
     <h1 class="title">記録</h1>
     <div class="stat-grid">
+      <div class="stat"><div class="n" id="stTimeToday">0分</div><div class="l">今日の学習時間</div></div>
+      <div class="stat"><div class="n" id="stTimeWeek">0分</div><div class="l">7日間の学習時間</div></div>
       <div class="stat"><div class="n" id="stOpens">0</div><div class="l">今日のテスト回数</div></div>
       <div class="stat"><div class="n" id="stViewed">0</div><div class="l">今日見た単語</div></div>
       <div class="stat"><div class="n" id="stNew">0</div><div class="l">今日覚えた</div></div>
@@ -313,6 +315,43 @@ function load(){
 function save(){ localStorage.setItem('cv_db', JSON.stringify(DB)); }
 
 function stat(){ const k=todayKey(); return DB.stats[k] ||= {opens:0,viewed:0,neu:0}; }
+
+/* ---------------- 利用時間の計測（前面にある時間だけ） ---------------- */
+const APP_ID='cn';
+let sesStart = document.hidden ? 0 : Date.now();
+function fmtDur(ms){
+  const m=Math.round(ms/60000);
+  if(m<60) return m+'分';
+  return Math.floor(m/60)+'時間'+(m%60?String(m%60)+'分':'');
+}
+function closeSession(){
+  if(!sesStart) return;
+  const s=sesStart, e=Date.now(); sesStart=0;
+  const dur=e-s;
+  if(dur<5000) return;                       // 5秒未満は無視
+  const st=stat(); st.ms=(st.ms||0)+dur;     // 日次合計
+  DB.sessions=DB.sessions||[];
+  DB.sessions.push({s,e,app:APP_ID});
+  if(DB.sessions.length>800) DB.sessions=DB.sessions.slice(-800);
+  save();
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) closeSession();
+  else if(!sesStart) sesStart=Date.now();
+});
+window.addEventListener('pagehide',closeSession);
+window.addEventListener('beforeunload',closeSession);
+setInterval(()=>{ if(!document.hidden){ closeSession(); sesStart=Date.now(); } },60000); // 定期保存
+function todayMs(){ const st=DB.stats[todayKey()]; return (st&&st.ms||0)+(sesStart?Date.now()-sesStart:0); }
+function weekMs(){
+  let t=0; const now=new Date();
+  for(let i=0;i<7;i++){
+    const d=new Date(now); d.setDate(now.getDate()-i);
+    const k=d.toISOString().slice(0,10);
+    t+=(DB.stats[k]&&DB.stats[k].ms)||0;
+  }
+  return t+(sesStart?Date.now()-sesStart:0);
+}
 
 function toast(msg){
   const t=document.getElementById('toast');
@@ -656,6 +695,8 @@ document.getElementById('btnImport').onclick=()=>{
 /* ---------------- stats ---------------- */
 function renderStats(){
   const s=stat();
+  document.getElementById('stTimeToday').textContent=fmtDur(todayMs());
+  document.getElementById('stTimeWeek').textContent=fmtDur(weekMs());
   document.getElementById('stOpens').textContent=s.opens;
   document.getElementById('stViewed').textContent=s.viewed;
   document.getElementById('stNew').textContent=s.neu;
