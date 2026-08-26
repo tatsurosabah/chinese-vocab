@@ -287,6 +287,12 @@
       <div class="stat"><div class="n" id="stVidDone">0</div><div class="l">視聴済み（累計）</div></div>
     </div>
     <div class="setting">
+      <span class="lab">同期キー</span>
+      <input class="text" id="syncKeyInput" placeholder="キーを貼り付け" autocapitalize="off"
+        spellcheck="false" style="max-width:60%;margin-bottom:0;font-size:13px;padding:8px 10px;">
+    </div>
+    <p class="note" id="syncNote">※ Tideに学習時間を自動送信します。全端末で同じキーを入れてください。</p>
+    <div class="setting">
       <span class="lab">毎日のリマインド</span>
       <input type="time" id="remindTime" value="20:00">
     </div>
@@ -408,6 +414,7 @@ function closeSession(){
   DB.sessions.push({s,e,app:APP_ID});
   if(DB.sessions.length>800) DB.sessions=DB.sessions.slice(-800);
   save();
+  try{ pushSessions(); }catch(e){}
 }
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) closeSession();
@@ -416,6 +423,29 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('pagehide',closeSession);
 window.addEventListener('beforeunload',closeSession);
 setInterval(()=>{ if(!document.hidden){ closeSession(); sesStart=Date.now(); } },60000); // 定期保存
+/* ---------------- クラウド同期（Firebase RTDB / REST直叩き） ---------------- */
+const SYNC_URL='https://claude-9c580-default-rtdb.asia-southeast1.firebasedatabase.app';
+function syncKey(){ return localStorage.getItem('sync_key')||''; }
+function setSyncKey(k){ localStorage.setItem('sync_key',(k||'').trim()); }
+let syncing=false;
+async function pushSessions(){
+  const k=syncKey();
+  if(!k || syncing) return;
+  const pend=(DB.sessions||[]).filter(x=>!x.up);
+  if(!pend.length) return;
+  syncing=true;
+  try{
+    const payload={};
+    pend.forEach(x=>{ payload[APP_ID+'_'+x.s]={app:APP_ID,s:x.s,e:x.e}; });
+    const r=await fetch(SYNC_URL+'/u/'+encodeURIComponent(k)+'/sessions.json',
+      {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(r.ok){ pend.forEach(x=>x.up=1); save(); }
+  }catch(e){/* オフライン時は次回に持ち越し */}
+  finally{ syncing=false; }
+}
+setInterval(pushSessions, 120000);
+window.addEventListener('online', pushSessions);
+
 function todayMs(){ const st=DB.stats[todayKey()]; return (st&&st.ms||0)+(sesStart?Date.now()-sesStart:0); }
 function weekMs(){
   let t=0; const now=new Date();
@@ -909,9 +939,21 @@ function renderStats(){
   document.getElementById('stVidToday').textContent=s.vid||0;
   document.getElementById('stVidDone').textContent=(DB.videos||[]).filter(v=>v.watched).length;
   document.getElementById('remindTime').value=DB.remind;
+  const sk=document.getElementById('syncKeyInput');
+  if(sk && document.activeElement!==sk) sk.value=syncKey();
+  const pend=(DB.sessions||[]).filter(x=>!x.up).length;
+  const note=document.getElementById('syncNote');
+  if(note) note.textContent = syncKey()
+      ? (pend? `※ 同期待ち ${pend}件（オンラインになると自動送信）` : '※ 同期済み。Tideに学習時間を送信しています。')
+      : '※ Tideに学習時間を自動送信します。全端末で同じキーを入れてください。';
   populateVoices();
 }
 document.getElementById('voiceSel').onchange=e=>{ DB.voice=e.target.value; save(); speak('你好，这是中文示例。'); };
+document.getElementById('syncKeyInput').onchange=e=>{
+  setSyncKey(e.target.value);
+  toast(syncKey()?'同期キーを保存しました':'同期を停止しました');
+  pushSessions().then(()=>renderStats());
+};
 document.getElementById('remindTime').onchange=e=>{ DB.remind=e.target.value; save(); toast('リマインド時刻を保存'); };
 
 document.querySelectorAll('#filters button').forEach(b=>b.onclick=()=>{
