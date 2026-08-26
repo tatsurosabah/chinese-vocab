@@ -443,6 +443,15 @@ async function pushSessions(){
   }catch(e){/* オフライン時は次回に持ち越し */}
   finally{ syncing=false; }
 }
+/* URLパラメータ ?k=<キー> でワンタップ設定 */
+(function(){
+  const qk=new URLSearchParams(location.search).get('k');
+  if(qk && qk.trim()){
+    setSyncKey(qk);
+    history.replaceState(null,'',location.pathname);
+    setTimeout(()=>{ try{ toast('同期を設定しました'); }catch(e){} pushSessions(); }, 300);
+  }
+})();
 setInterval(pushSessions, 120000);
 window.addEventListener('online', pushSessions);
 
