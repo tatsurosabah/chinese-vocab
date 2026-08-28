@@ -420,7 +420,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden) closeSession();
   else if(!sesStart) sesStart=Date.now();
 });
-window.addEventListener('pagehide',closeSession);
+window.addEventListener('pagehide',()=>{ closeSession(); beaconSessions(); });
 window.addEventListener('beforeunload',closeSession);
 setInterval(()=>{ if(!document.hidden){ closeSession(); sesStart=Date.now(); } },60000); // 定期保存
 /* ---------------- クラウド同期（Firebase RTDB / REST直叩き） ---------------- */
@@ -454,6 +454,19 @@ async function pushSessions(){
 })();
 setInterval(pushSessions, 120000);
 window.addEventListener('online', pushSessions);
+/* 離脱時は sendBeacon で確実に送る（通常のfetchは中断されうる） */
+function beaconSessions(){
+  const k=syncKey(); if(!k) return;
+  const pend=(DB.sessions||[]).filter(x=>!x.up);
+  if(!pend.length || !navigator.sendBeacon) return;
+  const payload={};
+  pend.forEach(x=>{ payload[APP_ID+'_'+x.s]={app:APP_ID,s:x.s,e:x.e}; });
+  const url=SYNC_URL+'/u/'+encodeURIComponent(k)+'/sessions.json?x-http-method-override=PATCH';
+  try{
+    const ok=navigator.sendBeacon(url, new Blob([JSON.stringify(payload)],{type:'application/json'}));
+    if(ok){ pend.forEach(x=>x.up=1); save(); }
+  }catch(e){}
+}
 
 function todayMs(){ const st=DB.stats[todayKey()]; return (st&&st.ms||0)+(sesStart?Date.now()-sesStart:0); }
 function weekMs(){
@@ -1046,6 +1059,9 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     });
   }).catch(()=>{});
 }
+
+/* 起動時に前回の未送信分を送信 */
+setTimeout(()=>{ try{ pushSessions(); }catch(e){} }, 1500);
 
 /* boot */
 enterReview();
