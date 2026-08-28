@@ -81,6 +81,7 @@
   .card .ex{font-size:20px;margin-top:20px;line-height:1.5;}
   .card .expinyin{font-size:14px;color:var(--accent);margin-top:6px;}
   .card .exen{font-size:13px;color:var(--muted);margin-top:5px;}
+  .misstag{margin-top:12px;font-size:11px;color:#B0705E;letter-spacing:.06em;}
   .card .hint{margin-top:24px;font-size:12px;color:var(--faint);letter-spacing:.1em;}
   .spk{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
     border-radius:50%;border:1px solid var(--hair);background:var(--surface);cursor:pointer;
@@ -204,6 +205,7 @@
     <div class="mode-switch" id="modeSwitch">
       <button data-m="meaning" class="active">意味</button>
       <button data-m="pron">発音</button>
+      <button data-m="weak">苦手</button>
     </div>
     <div class="rev-head"><span id="revProgress">今日 0 / 20</span></div>
     <div class="rev-stage" id="revStage"></div>
@@ -246,6 +248,12 @@
       <button data-f="todo">未習得</button>
       <button data-f="done">習得済み</button>
       <button data-f="hard">発音要練習</button>
+      <button data-f="weak">よく忘れる</button>
+      <button data-f="weak">よく間違える</button>
+    </div>
+    <div class="filters" id="sortPick">
+      <button data-s="default" class="active">標準順</button>
+      <button data-s="miss">忘れやすい順</button>
     </div>
     <div class="filters scroll" id="catFilters"></div>
     <div class="count" id="listCount"></div>
@@ -594,6 +602,11 @@ function shuffle(a){
 }
 function buildQueue(){
   if(mode==='pron') return shuffle(DB.words.filter(w=>w.hard && !w.pdone));
+  if(mode==='weak'){
+    // 覚えた印でも、間違えた回数が多い語を忘却チェックとして出す
+    return DB.words.filter(w=>(w.miss||0)>0)
+      .sort((a,b)=>(b.miss||0)-(a.miss||0) || Math.random()-0.5);
+  }
   return shuffle(DB.words.filter(w=>!w.done));
 }
 function enterReview(){
@@ -627,6 +640,8 @@ function nextCard(){
     stage.innerHTML=`<div class="rev-empty"><div class="big hanzi">空</div>
       <div>${mode==='pron'
         ? '発音練習する単語がありません。<br>意味モードで「発音むずい」を付けてください。'
+        : mode==='weak'
+        ? '間違えた記録のある単語がまだありません。<br>意味モードで「まだ」を押すと記録されます。'
         : '未習得の単語はありません'}</div></div>`;
     return;
   }
@@ -635,12 +650,14 @@ function nextCard(){
   revealed=false;
   stat().viewed++;
   if(mode==='pron') stat().pron=(stat().pron||0)+1;
+  else { const sw=DB.words.find(x=>x.id===current.id); if(sw) sw.seen=(sw.seen||0)+1; }
   save();
   const isPron = mode==='pron';
   stage.innerHTML=`<div class="card${isPron?' revealed':''}" id="card">
       <div class="pinyin">${current.pinyin}</div>
       <div class="word hanzi">${current.hanzi}</div>
       <div class="word-spk">${spkBtn(current.hanzi)}</div>
+      ${(current.miss>0)?`<div class="misstag">これまで ✕${current.miss} 回</div>`:''}
       <div class="reveal">
         <div class="rule"></div>
         <div class="en">${current.en}</div>
@@ -691,7 +708,10 @@ document.getElementById('btnKnown').onclick=()=>judge(true);
 document.getElementById('btnStill').onclick=()=>{
   if(current){
     const w=DB.words.find(x=>x.id===current.id);
-    if(w){ if(mode==='pron') w.pmiss=(w.pmiss||0)+1; else w.miss=(w.miss||0)+1; }
+    if(w){
+      if(mode==='pron'){ w.pmiss=(w.pmiss||0)+1; }
+      else { w.miss=(w.miss||0)+1; w.lastMiss=todayKey(); stat().missed=(stat().missed||0)+1; }
+    }
     queue.push(current);
   }
   judge(false);
@@ -719,11 +739,19 @@ function fly(card,dir){ card.style.transition='transform .25s,opacity .25s';
 /* ---------------- list ---------------- */
 let listFilter='all';
 let catFilter='all';
+let listSort='default';
 function matchFilter(w){
   if(catFilter!=='all' && w.cat!==catFilter) return false;
   if(listFilter==='hard') return !!w.hard;
+  if(listFilter==='weak') return (w.miss||0)>0;
+  if(listFilter==='weak') return (w.miss||0)>0;
   return listFilter==='all'||(listFilter==='done'?w.done:!w.done);
 }
+document.querySelectorAll('#sortPick button').forEach(b=>b.onclick=()=>{
+  listSort=b.dataset.s;
+  document.querySelectorAll('#sortPick button').forEach(x=>x.classList.toggle('active',x===b));
+  renderList();
+});
 function renderCatFilters(){
   const box=document.getElementById('catFilters');
   const cats=[...new Set(DB.words.map(w=>w.cat))];
@@ -732,6 +760,32 @@ function renderCatFilters(){
     cats.map(c=>`<button data-c="${c}" class="${catFilter===c?'active':''}">${c}</button>`).join('');
   box.querySelectorAll('button').forEach(b=>b.onclick=()=>{
     catFilter=b.dataset.c; renderCatFilters(); renderList();
+  });
+}
+function rowHtml(w, showCat){
+  return `<div class="row ${w.done?'done':''}" data-id="${w.id}">
+    <span class="dot"></span>
+    <span class="h hanzi">${w.hanzi}</span>
+    <span class="p">${w.pinyin}</span>
+    <span class="e">${w.en}${showCat?` <i style="font-style:normal;color:var(--faint)">・${w.cat}</i>`:''}</span>
+    ${(w.miss>0)?`<span class="miss">✕${w.miss}</span>`:''}
+    <button class="rowbtn spk2" data-say="${w.hanzi}" title="発音">♪</button>
+    <button class="rowbtn hard2 ${w.hard?'on':''}" data-hard="${w.id}" title="発音むずい">発</button>
+    <button class="rowbtn mark ${w.done?'on':''}" data-mark="${w.id}">${w.done?'覚えた':'まだ'}</button>
+  </div>`;
+}
+function bindRows(body){
+  body.querySelectorAll('.spk2').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); speak(b.dataset.say); });
+  body.querySelectorAll('.hard2').forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation();
+    const w=DB.words.find(x=>x.id==b.dataset.hard);
+    w.hard=!w.hard; save(); renderList();
+    toast(w.hard?'発音リストに追加':'発音リストから外しました');
+  });
+  body.querySelectorAll('.mark').forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation();
+    const w=DB.words.find(x=>x.id==b.dataset.mark);
+    w.done=!w.done; save(); renderList();
   });
 }
 function renderList(){
@@ -745,6 +799,16 @@ function renderList(){
   const doneAll=DB.words.filter(w=>w.done).length;
   document.getElementById('listCount').textContent=
     `表示 ${shown} 語 ／ 全 ${DB.words.length} 語（習得 ${doneAll}）`;
+  // 「よく忘れる」は間違えた回数の多い順にフラット表示
+  if(listFilter==='weak'){
+    const ws=DB.words.filter(matchFilter).sort((a,b)=>(b.miss||0)-(a.miss||0));
+    body.innerHTML = ws.length ? `<div class="cat">
+      <div class="cat-head"><span class="name">間違えた回数の多い順</span>
+      <span class="meta">${ws.length} 語</span></div>
+      ${ws.map(w=>rowHtml(w,true)).join('')}</div>`
+      : '<p class="note">まだ間違えた記録がありません。</p>';
+    bindRows(body); return;
+  }
   const html=cats.map(cat=>{
     const all=DB.words.filter(w=>w.cat===cat);
     const ws=all.filter(matchFilter);
@@ -755,16 +819,7 @@ function renderList(){
         <span class="name" data-cat="${cat}">${cat}</span>
         <span class="meta">${done} / ${all.length}</span>
       </div>
-      ${ws.map(w=>`<div class="row ${w.done?'done':''}" data-id="${w.id}">
-        <span class="dot"></span>
-        <span class="h hanzi">${w.hanzi}</span>
-        <span class="p">${w.pinyin}</span>
-        <span class="e">${w.en}</span>
-        ${(w.miss>0)?`<span class="miss">✕${w.miss}</span>`:''}
-        <button class="rowbtn spk2" data-say="${w.hanzi}" title="発音">♪</button>
-        <button class="rowbtn hard2 ${w.hard?'on':''}" data-hard="${w.id}" title="発音むずい">発</button>
-        <button class="rowbtn mark ${w.done?'on':''}" data-mark="${w.id}">${w.done?'覚えた':'まだ'}</button>
-      </div>`).join('')}
+      ${ws.map(w=>rowHtml(w)).join('')}
     </div>`;
   }).join('');
   body.innerHTML=html||'<p class="note">該当する単語がありません。</p>';
