@@ -262,6 +262,7 @@
       <div class="filters" id="sugFilters">
         <button data-k="all" class="active">すべて</button>
         <button data-k="会話・インタビュー">会話</button>
+        <button data-k="学習・聞き流し">学習</button>
         <button data-k="ニュース・ドキュメンタリー">ニュース</button>
       </div>
       <div id="sugBody"></div>
@@ -1059,7 +1060,7 @@ function renderSuggest(){
       <img class="th" src="${thumbUrl(v.vid)}" alt="" loading="lazy">
       <div class="info">
         <div class="t">${v.title}</div>
-        <div class="a">${v.author||''} ・ ${v.dur||''}</div>
+        <div class="a">${v.author||''}${(v.dur||v.date)?' ・ '+(v.dur||v.date):''}</div>
       </div>
       <button class="addb ${have.has(v.vid)?'added':''}" data-add="${v.vid}">${have.has(v.vid)?'追加済':'Add'}</button>
     </div>`).join('');
