@@ -158,6 +158,14 @@
   .setting{display:flex;align-items:center;justify-content:space-between;padding:16px 2px;
     border-bottom:1px solid var(--hair);}
   .setting .lab{font-size:15px;}
+  .switch{position:relative;display:inline-block;width:46px;height:27px;flex:none;}
+  .switch input{opacity:0;width:0;height:0;position:absolute;}
+  .switch .track{position:absolute;inset:0;background:var(--faint);border-radius:999px;
+    transition:background .2s;cursor:pointer;}
+  .switch .track::after{content:'';position:absolute;width:21px;height:21px;left:3px;top:3px;
+    background:#fff;border-radius:50%;transition:transform .2s;}
+  .switch input:checked + .track{background:var(--accent);}
+  .switch input:checked + .track::after{transform:translateX(19px);}
   .setting input[type=time],.setting select{background:var(--surface);border:1px solid var(--hair);
     border-radius:10px;padding:7px 10px;font-size:15px;font-family:inherit;color:var(--ink);max-width:60%;}
   .note{font-size:12px;color:var(--muted);line-height:1.7;margin-top:14px;}
@@ -251,6 +259,7 @@
       <button data-f="weak">よく忘れる</button>
     </div>
     <div class="filters scroll" id="catFilters"></div>
+    <div class="filters scroll" id="sceneFilters"></div>
     <div class="count" id="listCount"></div>
     <div id="listBody"></div>
   </section>
@@ -299,6 +308,10 @@
     <div class="setting">
       <span class="lab">毎日のリマインド</span>
       <input type="time" id="remindTime" value="20:00">
+    </div>
+    <div class="setting">
+      <span class="lab">カードを自動で読み上げ</span>
+      <label class="switch"><input type="checkbox" id="autoplayChk" checked><span class="track"></span></label>
     </div>
     <div class="setting">
       <span class="lab">読み上げ音声</span>
@@ -385,14 +398,32 @@ function mergeExamples(db){
   if(changed) localStorage.setItem('cv_db', JSON.stringify(db));
   return db;
 }
+function mergeReview(db){
+  // 精査済みの「日本語の意味」と「場面」を後追いで反映する（進捗 done/miss/seen は一切触らない）
+  if(typeof SEED_WORDS==='undefined') return db;
+  const REV=2;                       // 精査データの版。上げると再反映される
+  if(db.rev===REV) return db;
+  const byHanzi=new Map();
+  SEED_WORDS.forEach(x=>{ if(!byHanzi.has(x.hanzi)) byHanzi.set(x.hanzi,x); });
+  db.words.forEach(w=>{
+    let cand=SEED_WORDS[w.id-1];
+    if(!(cand && cand.hanzi===w.hanzi)) cand=byHanzi.get(w.hanzi);
+    if(!cand) return;
+    if(cand.en) w.en=cand.en;         // 日本語に統一・誤りを修正した意味
+    if(cand.scene) w.scene=cand.scene;// 場面カテゴリ
+  });
+  db.rev=REV;
+  localStorage.setItem('cv_db', JSON.stringify(db));
+  return db;
+}
 function load(){
   const raw = localStorage.getItem('cv_db');
-  if(raw){ try{ const p = JSON.parse(raw); if(p.v === SEED_V) return ensureShape(mergeExamples(p)); }catch{} }
+  if(raw){ try{ const p = JSON.parse(raw); if(p.v === SEED_V) return ensureShape(mergeReview(mergeExamples(p))); }catch{} }
   const src = (typeof SEED_WORDS!=='undefined' && SEED_WORDS.length) ? SEED_WORDS : FALLBACK_WORDS;
   const words = src.map((w,i)=>({
     id:i+1, hanzi:w.hanzi, pinyin:w.pinyin||'', en:w.en||'',
     ex:w.ex||'', exPinyin:w.exPinyin||'', exEn:w.exEn||'',
-    cat:w.cat||'未分類', done:!!w.done, miss:w.miss||0
+    cat:w.cat||'未分類', scene:w.scene||'未分類', done:!!w.done, miss:w.miss||0
   }));
   return { v:SEED_V, words, videos:[], stats:{}, nextId:words.length+1, remind:'20:00', voice:'' };
 }
@@ -494,6 +525,19 @@ const SPK_SVG='<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d
 function spkBtn(text){ return `<button class="spk" data-say="${String(text).replace(/"/g,'&quot;')}">${SPK_SVG}</button>`; }
 /* 事前生成MP3を優先再生し、無ければ端末TTSにフォールバック */
 let curAudio=null;
+/* iOSは初回の自動再生をブロックするため、最初の操作で音声を解禁しておく */
+let audioUnlocked=false;
+function unlockAudio(){
+  if(audioUnlocked) return;
+  audioUnlocked=true;
+  try{
+    const a=new Audio('data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA');
+    a.volume=0; a.play().catch(()=>{});
+  }catch{}
+  try{ if('speechSynthesis' in window) speechSynthesis.resume(); }catch{}
+}
+['touchstart','click'].forEach(ev=>
+  document.addEventListener(ev,unlockAudio,{once:true,passive:true}));
 function md5(s){/*小さなMD5実装*/
   function L(k,d){return(k<<d)|(k>>>(32-d));}
   function K(G,k){var I,d,F,H,x;F=(G&2147483648);H=(k&2147483648);I=(G&1073741824);d=(k&1073741824);x=(G&1073741823)+(k&1073741823);
@@ -586,7 +630,7 @@ document.getElementById('nav').addEventListener('click',e=>{
     document.getElementById(id).classList.toggle('active',k===t));
   if(t==='review') enterReview();
   if(t==='video') renderVideos();
-  if(t==='list'){ renderCatFilters(); renderList(); }
+  if(t==='list'){ renderCatFilters(); renderSceneFilters(); renderList(); }
   if(t==='stats') renderStats();
 });
 
@@ -681,13 +725,16 @@ function nextCard(){
     toast(w.hard?'発音リストに追加':'発音リストから外しました');
   });
   attachSwipe(card);
-  if(isPron) setTimeout(()=>speak(current.hanzi),250); // 発音モードは自動再生
+  // 発音モードは常に自動再生。意味モードは設定（既定ON）に従う
+  if(isPron || DB.autoplay!==false) setTimeout(()=>speak(current.hanzi),250);
 }
 function reveal(){
   if(revealed||!current) return;
   revealed=true;
   document.getElementById('card').classList.add('revealed');
   document.getElementById('hint').style.opacity=0;
+  // 意味を開いたら例文も読み上げ（自動再生ONのとき）
+  if(DB.autoplay!==false && current.ex) setTimeout(()=>speak(current.ex),200);
 }
 function judge(known){
   if(!current) return;
@@ -735,11 +782,26 @@ function fly(card,dir){ card.style.transition='transform .25s,opacity .25s';
 /* ---------------- list ---------------- */
 let listFilter='all';
 let catFilter='all';
+let sceneFilter='all';
 function matchFilter(w){
+  if(sceneFilter!=='all' && (w.scene||'未分類')!==sceneFilter) return false;
   if(catFilter!=='all' && w.cat!==catFilter) return false;
   if(listFilter==='hard') return !!w.hard;
   if(listFilter==='weak') return (w.miss||0)>0;
   return listFilter==='all'||(listFilter==='done'?w.done:!w.done);
+}
+function renderSceneFilters(){
+  const box=document.getElementById('sceneFilters');
+  if(!box) return;
+  const scenes=[...new Set(DB.words.map(w=>w.scene||'未分類'))]
+    .sort((a,b)=>DB.words.filter(w=>(w.scene||'未分類')===b).length
+                -DB.words.filter(w=>(w.scene||'未分類')===a).length);
+  if(sceneFilter!=='all' && !scenes.includes(sceneFilter)) sceneFilter='all';
+  box.innerHTML=`<button data-s="all" class="${sceneFilter==='all'?'active':''}">全場面</button>`+
+    scenes.map(c=>`<button data-s="${c}" class="${sceneFilter===c?'active':''}">${c}</button>`).join('');
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    sceneFilter=b.dataset.s; renderSceneFilters(); renderList();
+  });
 }
 function renderCatFilters(){
   const box=document.getElementById('catFilters');
@@ -1014,8 +1076,13 @@ function renderStats(){
       ? (pend? `※ 同期待ち ${pend}件（オンラインになると自動送信）` : '※ 同期済み。Tideに学習時間を送信しています。')
       : '※ Tideに学習時間を自動送信します。全端末で同じキーを入れてください。';
   populateVoices();
+  document.getElementById('autoplayChk').checked = DB.autoplay!==false;
 }
 document.getElementById('voiceSel').onchange=e=>{ DB.voice=e.target.value; save(); speak('你好，这是中文示例。'); };
+document.getElementById('autoplayChk').onchange=e=>{
+  DB.autoplay=e.target.checked; save();
+  toast(e.target.checked?'自動読み上げ ON':'自動読み上げ OFF');
+};
 document.getElementById('syncKeyInput').onchange=e=>{
   setSyncKey(e.target.value);
   toast(syncKey()?'同期キーを保存しました':'同期を停止しました');
