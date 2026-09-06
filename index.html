@@ -42,6 +42,20 @@
   .screen.review{padding:0;display:none;}
   .screen.review.active{display:flex;flex-direction:column;}
 
+  .title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .title-row h1.title{margin-bottom:0;}
+  .iconbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--hair);
+    background:var(--surface);color:var(--muted);border-radius:999px;padding:7px 14px;
+    font-size:12px;letter-spacing:.08em;cursor:pointer;font-family:inherit;}
+  .iconbtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;}
+  .iconbtn:active{background:var(--accent-soft);}
+  .pgroup{margin-bottom:30px;}
+  .pgroup-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding-bottom:9px;border-bottom:1px solid var(--hair);margin-bottom:6px;}
+  .pgroup-head .nm{font-size:16px;font-weight:500;}
+  .pgroup-head .sub{font-size:11px;color:var(--faint);margin-top:4px;letter-spacing:.04em;}
+  .pgroup-head .practice{flex:none;border:1px solid transparent;background:var(--accent);color:#fff;
+    border-radius:999px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;}
   h1.title{font-size:15px;font-weight:500;letter-spacing:.18em;color:var(--muted);
     text-transform:uppercase;margin:14px 2px 26px;}
 
@@ -121,7 +135,8 @@
   .row .p{font-size:13px;color:var(--accent);min-width:74px;}
   .row .e{font-size:13px;color:var(--muted);flex:1;}
   .row .miss{font-size:11px;color:#B0705E;letter-spacing:.04em;flex:none;}
-  .row .e{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row{flex-wrap:wrap;}
+  .row .e{min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .rowbtn{flex:none;border:1px solid var(--hair);background:var(--surface);color:var(--muted);
     border-radius:999px;font-size:11px;padding:5px 9px;cursor:pointer;font-family:inherit;letter-spacing:.04em;}
   .rowbtn.mark{min-width:52px;}
@@ -271,7 +286,17 @@
 
   <!-- ===== 一覧 ===== -->
   <section class="screen" id="s-list">
-    <h1 class="title">単語一覧</h1>
+    <div class="title-row">
+      <h1 class="title">単語一覧</h1>
+      <button class="iconbtn" id="goImport" title="取り込み">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg>
+        <span>取込</span>
+      </button>
+    </div>
+    <div class="filters" id="viewPick">
+      <button data-view="cat" class="active">カテゴリ別</button>
+      <button data-view="pron">発音別</button>
+    </div>
     <div class="filters" id="filters">
       <button data-f="all" class="active">すべて</button>
       <button data-f="todo">未習得</button>
@@ -287,7 +312,13 @@
 
   <!-- ===== 取込 ===== -->
   <section class="screen" id="s-import">
-    <h1 class="title">インポート</h1>
+    <div class="title-row">
+      <h1 class="title">インポート</h1>
+      <button class="iconbtn" id="backToList" title="一覧へ戻る">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        <span>一覧</span>
+      </button>
+    </div>
     <label class="fld">カテゴリ名</label>
     <input class="text" id="impCategory" placeholder="例：商务会话" autocapitalize="off">
     <ol class="steps">
@@ -363,10 +394,6 @@
     <button data-t="list">
       <svg viewBox="0 0 24 24"><path d="M8 7h11M8 12h11M8 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/></svg>
       一覧
-    </button>
-    <button data-t="import">
-      <svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg>
-      取込
     </button>
     <button data-t="stats">
       <svg viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-7"/></svg>
@@ -644,26 +671,39 @@ if('speechSynthesis' in window){
 
 /* ---------------- navigation ---------------- */
 const screens={review:'s-review',video:'s-video',list:'s-list',import:'s-import',stats:'s-stats'};
-document.getElementById('nav').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b) return;
-  const t=b.dataset.t;
-  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x===b));
+function showScreen(t){
   Object.entries(screens).forEach(([k,id])=>
     document.getElementById(id).classList.toggle('active',k===t));
+  // 取込はタブに無いので、その間は「一覧」を選択状態にしておく
+  const navKey = (t==='import') ? 'list' : t;
+  document.querySelectorAll('#nav button').forEach(x=>
+    x.classList.toggle('active', x.dataset.t===navKey));
   if(t==='review') enterReview();
   if(t==='video'){ renderVideos(); renderSuggest(); }
   if(t==='list'){ renderCatFilters(); renderSceneFilters(); renderList(); }
   if(t==='stats') renderStats();
+}
+document.getElementById('nav').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  showScreen(b.dataset.t);
 });
 
 /* ---------------- review ---------------- */
 let queue=[], current=null, revealed=false, mode='meaning';
+let pronGroupKey=null;   // 発音グループ練習の対象（null=通常の発音リスト）
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   return a;
 }
 function buildQueue(){
-  if(mode==='pron') return shuffle(DB.words.filter(w=>w.hard && !w.pdone));
+  if(mode==='pron'){
+    if(pronGroupKey){
+      const ws=DB.words.filter(w=>pronGroupsOf(w).includes(pronGroupKey) && !w.pdone);
+      if(ws.length) return shuffle(ws);
+      pronGroupKey=null;   // 全部マスター済みなら通常の発音リストへ
+    }
+    return shuffle(DB.words.filter(w=>w.hard && !w.pdone));
+  }
   if(mode==='weak'){
     // 覚えた印でも、間違えた回数が多い語を忘却チェックとして出す
     return DB.words.filter(w=>(w.miss||0)>0)
@@ -681,8 +721,14 @@ function todayReviewed(){ return reviewedToday; }
 let reviewedToday=0;
 function updateProgress(){
   if(mode==='pron'){
-    const left=DB.words.filter(w=>w.hard&&!w.pdone).length;
-    document.getElementById('revProgress').textContent=`発音練習 残り ${left}`;
+    if(pronGroupKey){
+      const g=PRON_GROUPS.find(x=>x.key===pronGroupKey);
+      const left=DB.words.filter(w=>pronGroupsOf(w).includes(pronGroupKey)&&!w.pdone).length;
+      document.getElementById('revProgress').textContent=`${g?g.name:'発音'} 残り ${left}`;
+    }else{
+      const left=DB.words.filter(w=>w.hard&&!w.pdone).length;
+      document.getElementById('revProgress').textContent=`発音練習 残り ${left}`;
+    }
   }else{
     document.getElementById('revProgress').textContent=`今日 ${Math.min(reviewedToday,20)} / 20`;
   }
@@ -801,6 +847,75 @@ function attachSwipe(card){
 function fly(card,dir){ card.style.transition='transform .25s,opacity .25s';
   card.style.transform=`translateX(${dir*500}px) rotate(${dir*18}deg)`;card.style.opacity=0; }
 
+/* ---------------- 発音グループ（ピンインから自動分類） ---------------- */
+const RETRO=['zh','ch','sh','r'], ALVEO=['z','c','s'], PALAT=['j','q','x'];
+function stripTone(t){ return (t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function pySyls(py){ return stripTone(py).split(/[\s\/()·,]+/).filter(Boolean); }
+function pyInitial(sy){
+  for(const p of ['zh','ch','sh']) if(sy.startsWith(p)) return p;
+  for(const p of ['b','p','m','f','d','t','n','l','g','k','h','j','q','x','r','z','c','s','y','w'])
+    if(sy.startsWith(p)) return p;
+  return '';
+}
+const PRON_GROUPS=[
+  {key:'retro2',  name:'捲舌音の連続',   sub:'zh・ch・sh・r が続く（例：支持 zhī chí）'},
+  {key:'retroAlv',name:'捲舌 × 平舌',    sub:'zh/ch/sh と z/c/s の混在（例：注册 zhù cè）'},
+  {key:'retroPal',name:'捲舌 × 舌面',    sub:'zh/ch/sh と j/q/x の混在（例：出去 chū qù）'},
+  {key:'alvPal',  name:'平舌 × 舌面',    sub:'z/c/s と j/q/x の混在（例：自己 zì jǐ）'},
+  {key:'nng',     name:'n と ng の混在', sub:'語中で -n と -ng が混ざる'},
+  {key:'yu',      name:'ü の音',         sub:'ü・ju/qu/xu/yu・nü/lü'}
+];
+function pronGroupsOf(w){
+  const ss=pySyls(w.pinyin); if(!ss.length) return [];
+  const ini=ss.map(pyInitial);
+  const nRetro=ini.filter(i=>RETRO.includes(i)).length;
+  const hasR=nRetro>0, hasA=ini.some(i=>ALVEO.includes(i)), hasP=ini.some(i=>PALAT.includes(i));
+  const g=[];
+  if(nRetro>=2) g.push('retro2');
+  if(hasR&&hasA) g.push('retroAlv');
+  if(hasR&&hasP) g.push('retroPal');
+  if(hasA&&hasP) g.push('alvPal');
+  if(ss.some(x=>/ng$/.test(x)) && ss.some(x=>/n$/.test(x)&&!/ng$/.test(x))) g.push('nng');
+  // ü は声調記号を外すと消えるので、元のピンインから判定する
+  const raw=(w.pinyin||'').toLowerCase();
+  const j=ss.join(' ');
+  if(/[üǖǘǚǜ]/.test(raw) || /\bv/.test(raw) || /(^|\s)(ju|qu|xu|yu|nv|lv)/.test(j)) g.push('yu');
+  return g;
+}
+function renderPronGroups(){
+  const body=document.getElementById('listBody');
+  const buckets={};
+  PRON_GROUPS.forEach(g=>buckets[g.key]=[]);
+  DB.words.forEach(w=>{
+    if(catFilter!=='all' && w.cat!==catFilter) return;
+    pronGroupsOf(w).forEach(k=>buckets[k]&&buckets[k].push(w));
+  });
+  const total=Object.values(buckets).reduce((a,b)=>a+b.length,0);
+  document.getElementById('listCount').textContent=`発音で分類：延べ ${total} 語（1語が複数グループに入ることがあります）`;
+  const html=PRON_GROUPS.map(g=>{
+    const ws=buckets[g.key]; if(!ws.length) return '';
+    const done=ws.filter(w=>w.pdone).length;
+    return `<div class="pgroup">
+      <div class="pgroup-head">
+        <div><div class="nm">${g.name}</div><div class="sub">${g.sub} ・ ${ws.length}語（発音マスター ${done}）</div></div>
+        <button class="practice" data-practice="${g.key}">練習</button>
+      </div>
+      ${ws.map(w=>rowHtml(w,true)).join('')}
+    </div>`;
+  }).join('');
+  body.innerHTML=html||'<p class="note">該当する単語がありません。</p>';
+  bindRows(body);
+  body.querySelectorAll('.practice').forEach(b=>b.onclick=()=>startPronGroup(b.dataset.practice));
+}
+function startPronGroup(key){
+  pronGroupKey=key;
+  document.querySelector('#nav button[data-t="review"]').click();
+  const mb=document.querySelector('#modeSwitch button[data-m="pron"]');
+  if(mb) mb.click();
+  const g=PRON_GROUPS.find(x=>x.key===key);
+  toast(`${g?g.name:''} を練習します`);
+}
+
 /* ---------------- list ---------------- */
 let listFilter='all';
 let catFilter='all';
@@ -825,6 +940,15 @@ function renderSceneFilters(){
     sceneFilter=b.dataset.s; renderSceneFilters(); renderList();
   });
 }
+document.querySelectorAll('#viewPick button').forEach(b=>b.onclick=()=>{
+  listView=b.dataset.view;
+  document.querySelectorAll('#viewPick button').forEach(x=>x.classList.toggle('active',x===b));
+  // 発音別では「習得状況」フィルタは意味を持たないので隠す
+  document.getElementById('filters').style.display = listView==='pron' ? 'none' : '';
+  renderList();
+});
+document.getElementById('goImport').onclick=()=>showScreen('import');
+document.getElementById('backToList').onclick=()=>showScreen('list');
 function renderCatFilters(){
   const box=document.getElementById('catFilters');
   const cats=[...new Set(DB.words.map(w=>w.cat))];
@@ -861,7 +985,9 @@ function bindRows(body){
     w.done=!w.done; save(); renderList();
   });
 }
+let listView='cat';   // 'cat' = カテゴリ別 / 'pron' = 発音別
 function renderList(){
+  if(listView==='pron'){ renderPronGroups(); return; }
   const body=document.getElementById('listBody');
   const cats=[...new Set(DB.words.map(w=>w.cat))];
   if(DB.words.length===0){
