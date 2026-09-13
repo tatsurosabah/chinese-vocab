@@ -49,6 +49,21 @@
     font-size:12px;letter-spacing:.08em;cursor:pointer;font-family:inherit;}
   .iconbtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;}
   .iconbtn:active{background:var(--accent-soft);}
+  .memo-add{background:var(--surface);border:1px solid var(--hair);border-radius:18px;
+    padding:16px 15px 15px;margin-bottom:26px;}
+  .memo-add .text{margin-bottom:12px;}
+  .memo-add .filters{margin-bottom:12px;}
+  .memo-add .btn{padding:13px;}
+  .mrow{display:flex;gap:12px;align-items:flex-start;padding:13px 2px;border-bottom:1px solid var(--hair);}
+  .mrow .mbody{flex:1;min-width:0;}
+  .mrow .mt{font-size:16px;line-height:1.4;word-break:break-word;}
+  .mrow .mmeta{font-size:11px;color:var(--faint);margin-top:5px;letter-spacing:.04em;}
+  .mrow .mnote{font-size:12px;color:var(--muted);margin-top:5px;}
+  .mrow.solved .mt{opacity:.45;text-decoration:line-through;}
+  .mrow .mops{display:flex;flex-direction:column;gap:6px;flex:none;}
+  .kind-tag{display:inline-block;font-size:10px;letter-spacing:.06em;border-radius:999px;
+    padding:2px 8px;border:1px solid var(--hair);color:var(--muted);margin-right:6px;}
+  .kind-tag.couldnt{background:#EFE4DE;border-color:#D9BFB2;color:#8A5A45;}
   .pgroup{margin-bottom:30px;}
   .pgroup-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
     padding-bottom:9px;border-bottom:1px solid var(--hair);margin-bottom:6px;}
@@ -248,6 +263,36 @@
     </div>
   </section>
 
+  <!-- ===== メモ ===== -->
+  <section class="screen" id="s-memo">
+    <div class="title-row">
+      <h1 class="title">メモ</h1>
+      <button class="iconbtn" id="memoToImport" title="取り込み">
+        <svg viewBox="0 0 24 24"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg>
+        <span>取込</span>
+      </button>
+    </div>
+
+    <div class="memo-add">
+      <input class="text" id="memoText" placeholder="聞いた言葉・言えなかった表現" autocapitalize="off">
+      <div class="filters" id="memoKindPick">
+        <button data-mk="heard" class="active">聞いた（意味を知りたい）</button>
+        <button data-mk="couldnt">言えなかった</button>
+      </div>
+      <input class="text" id="memoNote" placeholder="状況メモ（任意）例：屋台で / 同僚が使っていた" autocapitalize="off">
+      <button class="btn solid" id="btnAddMemo">ストックする</button>
+    </div>
+
+    <div class="filters" id="memoFilters">
+      <button data-mf="open" class="active">未解決</button>
+      <button data-mf="done">解決済み</button>
+      <button data-mf="all">すべて</button>
+    </div>
+    <div class="count" id="memoCount"></div>
+    <button class="btn ghost" id="btnMemoPrompt">未解決をまとめてLLMに聞く（プロンプトをコピー）</button>
+    <div id="memoBody"></div>
+  </section>
+
   <!-- ===== 動画 ===== -->
   <section class="screen" id="s-video">
     <h1 class="title">動画</h1>
@@ -391,6 +436,10 @@
       <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M10 10l5 2-5 2z"/></svg>
       動画
     </button>
+    <button data-t="memo">
+      <svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 13h6M9 17h4"/></svg>
+      メモ
+    </button>
     <button data-t="list">
       <svg viewBox="0 0 24 24"><path d="M8 7h11M8 12h11M8 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01"/></svg>
       一覧
@@ -431,6 +480,7 @@ let DB = load();
 save();
 function ensureShape(db){
   if(!Array.isArray(db.videos)) db.videos=[];
+  if(!Array.isArray(db.memos)) db.memos=[];
   if(!db.stats) db.stats={};
   return db;
 }
@@ -474,7 +524,7 @@ function load(){
     ex:w.ex||'', exPinyin:w.exPinyin||'', exEn:w.exEn||'',
     cat:w.cat||'未分類', scene:w.scene||'未分類', done:!!w.done, miss:w.miss||0
   }));
-  return { v:SEED_V, words, videos:[], stats:{}, nextId:words.length+1, remind:'20:00', voice:'' };
+  return { v:SEED_V, words, videos:[], memos:[], stats:{}, nextId:words.length+1, remind:'20:00', voice:'' };
 }
 function save(){ localStorage.setItem('cv_db', JSON.stringify(DB)); }
 
@@ -670,7 +720,7 @@ if('speechSynthesis' in window){
 }
 
 /* ---------------- navigation ---------------- */
-const screens={review:'s-review',video:'s-video',list:'s-list',import:'s-import',stats:'s-stats'};
+const screens={review:'s-review',video:'s-video',memo:'s-memo',list:'s-list',import:'s-import',stats:'s-stats'};
 function showScreen(t){
   Object.entries(screens).forEach(([k,id])=>
     document.getElementById(id).classList.toggle('active',k===t));
@@ -681,6 +731,7 @@ function showScreen(t){
   if(t==='review') enterReview();
   if(t==='video'){ renderVideos(); renderSuggest(); }
   if(t==='list'){ renderCatFilters(); renderSceneFilters(); renderList(); }
+  if(t==='memo') renderMemos();
   if(t==='stats') renderStats();
 }
 document.getElementById('nav').addEventListener('click',e=>{
@@ -846,6 +897,93 @@ function attachSwipe(card){
 }
 function fly(card,dir){ card.style.transition='transform .25s,opacity .25s';
   card.style.transform=`translateX(${dir*500}px) rotate(${dir*18}deg)`;card.style.opacity=0; }
+
+/* ---------------- メモ（街で拾った言葉のストック） ---------------- */
+let memoKind='heard', memoFilter='open';
+
+document.querySelectorAll('#memoKindPick button').forEach(b=>b.onclick=()=>{
+  memoKind=b.dataset.mk;
+  document.querySelectorAll('#memoKindPick button').forEach(x=>x.classList.toggle('active',x===b));
+});
+document.querySelectorAll('#memoFilters button').forEach(b=>b.onclick=()=>{
+  memoFilter=b.dataset.mf;
+  document.querySelectorAll('#memoFilters button').forEach(x=>x.classList.toggle('active',x===b));
+  renderMemos();
+});
+document.getElementById('btnAddMemo').onclick=()=>{
+  const t=document.getElementById('memoText').value.trim();
+  if(!t){ toast('内容を入力してください'); return; }
+  const note=document.getElementById('memoNote').value.trim();
+  DB.memos.unshift({id:Date.now(), text:t, note, kind:memoKind, done:false, added:todayKey()});
+  save();
+  document.getElementById('memoText').value='';
+  document.getElementById('memoNote').value='';
+  renderMemos();
+  toast('ストックしました');
+};
+document.getElementById('memoToImport').onclick=()=>showScreen('import');
+
+function memoPrompt(list){
+  const heard=list.filter(m=>m.kind==='heard');
+  const could=list.filter(m=>m.kind==='couldnt');
+  let p='私は中国語を学んでいます。以下のメモについて調べてください。\n\n';
+  if(heard.length){
+    p+='【聞いたが意味が分からなかった言葉】（聞こえた音や漢字のメモです。正しい簡体字を推測してください）\n';
+    heard.forEach(m=>{ p+=`- ${m.text}${m.note?`（状況: ${m.note}）`:''}\n`; });
+    p+='\n';
+  }
+  if(could.length){
+    p+='【中国語で言えなかった表現】（この意味を表す自然な中国語を教えてください）\n';
+    could.forEach(m=>{ p+=`- ${m.text}${m.note?`（状況: ${m.note}）`:''}\n`; });
+    p+='\n';
+  }
+  p+='それぞれについて、下記のJSON配列だけを出力してください。説明や前置きは不要です。\n';
+  p+='{"hanzi":"簡体字","pinyin":"声調記号付きピンイン","en":"簡潔な意味","ex":"短い例文（簡体字）","exPinyin":"例文のピンイン","exEn":"例文の訳"}\n';
+  return p;
+}
+document.getElementById('btnMemoPrompt').onclick=async()=>{
+  const open=DB.memos.filter(m=>!m.done);
+  if(!open.length){ toast('未解決のメモがありません'); return; }
+  try{
+    await navigator.clipboard.writeText(memoPrompt(open));
+    toast(`${open.length}件のプロンプトをコピーしました`);
+  }catch{ toast('コピーできませんでした'); }
+};
+
+function renderMemos(){
+  const body=document.getElementById('memoBody');
+  const all=DB.memos||[];
+  const shown=all.filter(m=>memoFilter==='all'||(memoFilter==='done'?m.done:!m.done));
+  document.getElementById('memoCount').textContent =
+    all.length ? `未解決 ${all.filter(m=>!m.done).length} 件 ／ 全 ${all.length} 件` : '';
+  if(!all.length){
+    body.innerHTML='<p class="note">まだメモがありません。聞こえた言葉や、言えなかった表現をその場でストックしておきましょう。</p>';
+    return;
+  }
+  body.innerHTML = shown.length ? shown.map(m=>`<div class="mrow ${m.done?'solved':''}" data-id="${m.id}">
+      <div class="mbody">
+        <div class="mt">${m.text}</div>
+        <div class="mmeta"><span class="kind-tag ${m.kind}">${m.kind==='heard'?'聞いた':'言えなかった'}</span>${m.added||''}</div>
+        ${m.note?`<div class="mnote">${m.note}</div>`:''}
+      </div>
+      <div class="mops">
+        <button class="rowbtn mark ${m.done?'on':''}" data-md="${m.id}">${m.done?'解決':'未'}</button>
+        <button class="rowbtn del" data-mx="${m.id}">削除</button>
+      </div>
+    </div>`).join('') : '<p class="note">該当するメモがありません。</p>';
+
+  body.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>{
+    const m=DB.memos.find(x=>x.id==b.dataset.md);
+    m.done=!m.done; save(); renderMemos();
+    toast(m.done?'解決済みにしました':'未解決に戻しました');
+  });
+  body.querySelectorAll('[data-mx]').forEach(b=>b.onclick=()=>{
+    const m=DB.memos.find(x=>x.id==b.dataset.mx);
+    if(confirm(`削除しますか？\n${m.text}`)){
+      DB.memos=DB.memos.filter(x=>x.id!=b.dataset.mx); save(); renderMemos();
+    }
+  });
+}
 
 /* ---------------- 発音グループ（ピンインから自動分類） ---------------- */
 const RETRO=['zh','ch','sh','r'], ALVEO=['z','c','s'], PALAT=['j','q','x'];
